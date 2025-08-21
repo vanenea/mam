@@ -17,4 +17,4 @@ COPY . .
 EXPOSE 5000
 
 # 启动服务
-CMD ["python", "app.py"]
+CMD ["python", "main.py"]
