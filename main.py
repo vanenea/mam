@@ -123,5 +123,17 @@ def account_data():
 
     return jsonify(data)
 
+# ==================
+# 删除记录
+# ==================
+@app.route("/delete/<int:record_id>", methods=["POST"])
+def delete_record(record_id):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("DELETE FROM records WHERE id=?", (record_id,))
+    conn.commit()
+    conn.close()
+    return redirect("/records")
+
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)
