@@ -14,9 +14,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制项目代码
 COPY . .
-
+# 解决数据库权限问题
 RUN chmod 777 /app/finance.db
-RUN adduser -D user
+RUN adduser --disabled-login user
 RUN chown -R user:user /app
 
 # Flask 默认监听 5000 端口
