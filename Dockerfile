@@ -1,29 +1,29 @@
-# 使用轻量级 Python 镜像
-FROM python:3.11-slim
+FROM ghcr.io/astral-sh/uv:python3.11-slim AS builder
 
-# 安装 uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
-
-# copy directory
-RUN mkdir /app
-# 设置工作目录
 WORKDIR /app
 
-# 复制依赖文件
-COPY requirements.txt ./
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-cache
 
-# 使用 uv 安装依赖
-RUN uv pip install --no-cache-dir -r requirements.txt
+FROM python:3.11-slim
 
-# 复制项目代码
-COPY . .
-# 解决数据库权限问题
-RUN chmod 777 /app/finance.db
-RUN adduser --disabled-login user
-RUN chown -R user:user /app
+WORKDIR /app
 
-# Flask 默认监听 5000 端口
+COPY --from=builder /app/.venv /app/.venv
+COPY --chown=nobody:nogroup . .
+
+RUN rm -f /app/finance.db
+
+RUN adduser --disabled-password --gecos "" appuser
+RUN chown -R appuser:appuser /app
+
+USER appuser
+
+ENV PATH="/app/.venv/bin:$PATH"
+
 EXPOSE 5000
 
-# 启动服务
-CMD ["python", "main.py"]
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:5000/ || exit 1
+
+CMD ["uv", "run", "main.py"]

@@ -1,10 +1,44 @@
 from flask import Flask, render_template, request, redirect, jsonify
+from flask_login import (
+    LoginManager,
+    UserMixin,
+    login_user,
+    logout_user,
+    login_required,
+    current_user,
+)
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
+app.secret_key = "your-secret-key-change-this-in-production"
+
+login_manager = LoginManager(app)
+login_manager.login_view = "login"
+login_manager.cookie_name = "remember_token"
+login_manager.cookie_duration = None
 
 DB_NAME = "finance.db"
+
+
+class User(UserMixin):
+    def __init__(self, user_id, username, password):
+        self.id = user_id
+        self.username = username
+        self.password = password
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT id, username, password FROM users WHERE id=?", (int(user_id),))
+    user = c.fetchone()
+    conn.close()
+    if user:
+        return User(user[0], user[1], user[2])
+    return None
 
 
 # 初始化数据库
@@ -18,6 +52,22 @@ def init_db():
                     account TEXT,
                     amount REAL
                 )""")
+    c.execute("""CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT UNIQUE,
+                    password TEXT
+                )""")
+
+    c.execute("SELECT COUNT(*) FROM users")
+    user_count = c.fetchone()[0]
+
+    if user_count == 0:
+        hashed_password = generate_password_hash("admin123")
+        c.execute(
+            "INSERT INTO users (username, password) VALUES (?, ?)",
+            ("admin", hashed_password),
+        )
+
     conn.commit()
     conn.close()
 
@@ -25,14 +75,48 @@ def init_db():
 init_db()
 
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username")
+        password = request.form.get("password")
+
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute(
+            "SELECT id, username, password FROM users WHERE username=?", (username,)
+        )
+        user = c.fetchone()
+        conn.close()
+
+        if user and check_password_hash(user[2], password):
+            user_obj = User(user[0], user[1], user[2])
+            remember = request.form.get("remember") == "on"
+            login_user(user_obj, remember=remember)
+            return redirect("/")
+        else:
+            return render_template("login.html", error="Invalid username or password")
+
+    return render_template("login.html")
+
+
+@app.route("/logout")
+@login_required
+def logout():
+    logout_user()
+    return redirect("/login")
+
+
 # 首页
 @app.route("/")
+@login_required
 def index():
     return render_template("index.html")
 
 
 # 添加数据
 @app.route("/add", methods=["POST"])
+@login_required
 def add_record():
     date = request.form.get("date")
     user = request.form.get("user")
@@ -52,6 +136,7 @@ def add_record():
 
 # 获取数据（前端画图用）
 @app.route("/data")
+@login_required
 def get_data():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -83,6 +168,7 @@ def get_data():
 # 新增：查询页面
 # ==================
 @app.route("/records")
+@login_required
 def records_page():
     date = request.args.get("date")
     conn = sqlite3.connect(DB_NAME)
@@ -104,6 +190,7 @@ def records_page():
 # 新增：修改记录
 # ==================
 @app.route("/update", methods=["POST"])
+@login_required
 def update_record():
     record_id = request.form.get("id")
     user = request.form.get("user")
@@ -125,6 +212,7 @@ def update_record():
 # 新增：账户维度数据接口
 # ==================
 @app.route("/account-data")
+@login_required
 def account_data():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -146,6 +234,7 @@ def account_data():
 # 新增：资金占比页面
 # ==================
 @app.route("/pie-chart")
+@login_required
 def pie_chart_page():
     return render_template("pie_chart.html")
 
@@ -154,6 +243,7 @@ def pie_chart_page():
 # 新增：资金占比数据接口
 # ==================
 @app.route("/pie-data")
+@login_required
 def pie_data():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -177,6 +267,7 @@ def pie_data():
 # 删除记录
 # ==================
 @app.route("/delete/<int:record_id>", methods=["POST"])
+@login_required
 def delete_record(record_id):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
