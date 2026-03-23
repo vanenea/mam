@@ -6,26 +6,30 @@ app = Flask(__name__)
 
 DB_NAME = "finance.db"
 
+
 # 初始化数据库
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS records (
+    c.execute("""CREATE TABLE IF NOT EXISTS records (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     date TEXT,
                     user TEXT,
                     account TEXT,
                     amount REAL
-                )''')
+                )""")
     conn.commit()
     conn.close()
 
+
 init_db()
+
 
 # 首页
 @app.route("/")
 def index():
     return render_template("index.html")
+
 
 # 添加数据
 @app.route("/add", methods=["POST"])
@@ -37,18 +41,23 @@ def add_record():
 
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("INSERT INTO records (date, user, account, amount) VALUES (?, ?, ?, ?)",
-              (date, user, account, amount))
+    c.execute(
+        "INSERT INTO records (date, user, account, amount) VALUES (?, ?, ?, ?)",
+        (date, user, account, amount),
+    )
     conn.commit()
     conn.close()
     return redirect("/")
+
 
 # 获取数据（前端画图用）
 @app.route("/data")
 def get_data():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT date, user, SUM(amount) FROM records GROUP BY date, user ORDER BY date")
+    c.execute(
+        "SELECT date, user, SUM(amount) FROM records GROUP BY date, user ORDER BY date"
+    )
     rows = c.fetchall()
     conn.close()
 
@@ -69,6 +78,7 @@ def get_data():
 
     return jsonify(data)
 
+
 # ==================
 # 新增：查询页面
 # ==================
@@ -78,12 +88,17 @@ def records_page():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     if date:
-        c.execute("SELECT id, date, user, account, amount FROM records WHERE date=?", (date,))
+        c.execute(
+            "SELECT id, date, user, account, amount FROM records WHERE date=?", (date,)
+        )
     else:
-        c.execute("SELECT id, date, user, account, amount FROM records ORDER BY date DESC LIMIT 20")
+        c.execute(
+            "SELECT id, date, user, account, amount FROM records ORDER BY date DESC LIMIT 20"
+        )
     rows = c.fetchall()
     conn.close()
     return render_template("records.html", records=rows, date=date)
+
 
 # ==================
 # 新增：修改记录
@@ -97,11 +112,14 @@ def update_record():
 
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("UPDATE records SET user=?, account=?, amount=? WHERE id=?",
-              (user, account, amount, record_id))
+    c.execute(
+        "UPDATE records SET user=?, account=?, amount=? WHERE id=?",
+        (user, account, amount, record_id),
+    )
     conn.commit()
     conn.close()
     return redirect("/records")
+
 
 # ==================
 # 新增：账户维度数据接口
@@ -123,6 +141,38 @@ def account_data():
 
     return jsonify(data)
 
+
+# ==================
+# 新增：资金占比页面
+# ==================
+@app.route("/pie-chart")
+def pie_chart_page():
+    return render_template("pie_chart.html")
+
+
+# ==================
+# 新增：资金占比数据接口
+# ==================
+@app.route("/pie-data")
+def pie_data():
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+
+    c.execute("SELECT user, SUM(amount) as total FROM records GROUP BY user")
+    user_rows = c.fetchall()
+    user_data = [{"name": user, "value": total} for user, total in user_rows]
+
+    c.execute("SELECT account, SUM(amount) as total FROM records GROUP BY account")
+    account_rows = c.fetchall()
+    account_data = [
+        {"name": account, "value": total} for account, total in account_rows
+    ]
+
+    conn.close()
+
+    return jsonify({"users": user_data, "accounts": account_data})
+
+
 # ==================
 # 删除记录
 # ==================
@@ -134,6 +184,7 @@ def delete_record(record_id):
     conn.commit()
     conn.close()
     return redirect("/records")
+
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)
