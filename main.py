@@ -248,15 +248,28 @@ def pie_data():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
-    c.execute("SELECT user, SUM(amount) as total FROM records GROUP BY user")
-    user_rows = c.fetchall()
-    user_data = [{"name": user, "value": total} for user, total in user_rows]
+    c.execute("SELECT MAX(date) FROM records")
+    latest_date = c.fetchone()[0]
 
-    c.execute("SELECT account, SUM(amount) as total FROM records GROUP BY account")
-    account_rows = c.fetchall()
-    account_data = [
-        {"name": account, "value": total} for account, total in account_rows
-    ]
+    if latest_date:
+        c.execute(
+            "SELECT user, SUM(amount) as total FROM records WHERE date=? GROUP BY user",
+            (latest_date,),
+        )
+        user_rows = c.fetchall()
+        user_data = [{"name": user, "value": total} for user, total in user_rows]
+
+        c.execute(
+            "SELECT account, SUM(amount) as total FROM records WHERE date=? GROUP BY account",
+            (latest_date,),
+        )
+        account_rows = c.fetchall()
+        account_data = [
+            {"name": account, "value": total} for account, total in account_rows
+        ]
+    else:
+        user_data = []
+        account_data = []
 
     conn.close()
 

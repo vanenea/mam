@@ -1,11 +1,14 @@
-FROM ghcr.io/astral-sh/uv:python3.11-slim AS builder
+FROM ghcr.io/astral-sh/uv:python3.11-trixie-slim AS builder
 
 WORKDIR /app
 
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-cache
 
 FROM python:3.11-slim
+
+# Copy uv binaries from the distroless image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
