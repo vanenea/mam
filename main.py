@@ -1,17 +1,38 @@
-from flask import Flask, render_template, request, redirect, jsonify
+from __future__ import annotations
+
+import os
+import sqlite3
+
+from flask import Flask, jsonify, redirect, render_template, request, url_for
 from flask_login import (
     LoginManager,
     UserMixin,
+    login_required,
     login_user,
     logout_user,
-    login_required,
-    current_user,
 )
-import sqlite3
-from datetime import datetime, timedelta
-from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.exceptions import NotFound
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
+from werkzeug.security import check_password_hash, generate_password_hash
+
+
+def normalize_base_path(raw_path: str | None) -> str:
+    """归一化子路径：保证以 / 开头且不以 / 结尾，根路径返回空字符串。"""
+    path = (raw_path or "").strip()
+    if not path or path == "/":
+        return ""
+    if not path.startswith("/"):
+        path = "/" + path
+    return path.rstrip("/")
+
+
+# 通过环境变量 MAM_BASE_PATH 配置部署子路径，例如 MAM_BASE_PATH=/mam
+BASE_PATH = normalize_base_path(os.environ.get("MAM_BASE_PATH"))
 
 app = Flask(__name__)
+# 子路径部署时把会话 cookie 限定在该路径下
+app.config["SESSION_COOKIE_PATH"] = BASE_PATH or "/"
+app.config["REMEMBER_COOKIE_PATH"] = BASE_PATH or "/"
 app.secret_key = "your-secret-key-change-this-in-production"
 
 login_manager = LoginManager(app)
@@ -93,7 +114,7 @@ def login():
             user_obj = User(user[0], user[1], user[2])
             remember = request.form.get("remember") == "on"
             login_user(user_obj, remember=remember)
-            return redirect("/")
+            return redirect(url_for("index"))
         else:
             return render_template("login.html", error="Invalid username or password")
 
@@ -104,7 +125,7 @@ def login():
 @login_required
 def logout():
     logout_user()
-    return redirect("/login")
+    return redirect(url_for("login"))
 
 
 # 首页
@@ -131,7 +152,7 @@ def add_record():
     )
     conn.commit()
     conn.close()
-    return redirect("/")
+    return redirect(url_for("index"))
 
 
 # 获取数据（前端画图用）
@@ -205,7 +226,7 @@ def update_record():
     )
     conn.commit()
     conn.close()
-    return redirect("/records")
+    return redirect(url_for("records_page"))
 
 
 # ==================
@@ -287,7 +308,12 @@ def delete_record(record_id):
     c.execute("DELETE FROM records WHERE id=?", (record_id,))
     conn.commit()
     conn.close()
-    return redirect("/records")
+    return redirect(url_for("records_page"))
+
+
+# 将应用挂载到配置的子路径下（未配置时保持根路径行为不变）
+if BASE_PATH:
+    app.wsgi_app = DispatcherMiddleware(NotFound(), {BASE_PATH: app.wsgi_app})
 
 
 if __name__ == "__main__":

@@ -30,7 +30,7 @@
 </div>
 
 <script>
-fetch("/pie-data")
+fetch("{{ url_for('pie_data') }}")
     .then(res => res.json())
     .then(data => {
         // 用户资金占比饼图

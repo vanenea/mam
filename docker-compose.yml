@@ -3,6 +3,9 @@ services:
     build: .
     ports:
       - "5000:5000"
+    environment:
+      # 部署子路径，例如 /mam；留空表示部署在根路径
+      - MAM_BASE_PATH=${MAM_BASE_PATH:-}
     volumes:
       - ./finance.db:/app/finance.db
     restart: unless-stopped
